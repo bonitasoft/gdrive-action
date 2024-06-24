@@ -59,6 +59,12 @@ jobs:
             exit 1
           fi
 
+          if [ "$(git diff --ignore-space-at-eol --text delete/dist/ | wc -l)" -gt "0" ]; then
+            echo "Detected uncommitted changes after build. See status below:"
+            git diff --ignore-space-at-eol --text delete/dist/
+            exit 1
+          fi
+
       # If `dist/` was different than expected, and this was not a Dependabot
       # PR, upload the expected version as a workflow artifact.
       - if: ${{ failure() && steps.diff.outcome == 'failure' }}

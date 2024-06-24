@@ -54,6 +54,9 @@ async function deleteFile(
   parentId: string,
   targetFilePath: string
 ): Promise<string | null> {
+  if (targetFilePath.endsWith('/')) {
+    targetFilePath = targetFilePath.substring(0, targetFilePath.length - 1)
+  }
   const targetPaths = targetFilePath.split(path.sep)
   while (targetPaths.length > 1) {
     const folderName = targetPaths.shift()

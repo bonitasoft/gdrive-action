@@ -51665,6 +51665,9 @@ async function runDelete() {
     }
 }
 async function deleteFile(drive, parentId, targetFilePath) {
+    if (targetFilePath.endsWith('/')) {
+        targetFilePath = targetFilePath.substring(0, targetFilePath.length - 1);
+    }
     const targetPaths = targetFilePath.split(path_1.default.sep);
     while (targetPaths.length > 1) {
         const folderName = targetPaths.shift();
