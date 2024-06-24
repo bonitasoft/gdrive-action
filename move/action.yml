@@ -1,0 +1,30 @@
+name: 'gdrive-move-action'
+description: 'GitHub Action that move files between Google Drive folders.'
+author: 'Bonitasoft'
+
+inputs:
+  credentials:
+    description: 'Google API credentials in base64 format.'
+    required: true
+  source-parent-folder-id:
+    description: 'The source parent folder ID in Google Drive.'
+    required: true
+  element-name:
+    description: 'The name of the element to move in GDrive source-parent-folder-id.'
+    required: true
+  target-parent-folder-id:
+    description: 'The target parent folder ID in Google Drive.'
+    required: true
+  target-filepath:
+    description:
+      'The target file path in Google Drive of the moved file relative to the
+      given target-parent-folder-id. Use parent folder root with source element-name when not
+      set.'
+
+outputs:
+  file-id:
+    description: 'The ID of the moved element.'
+
+runs:
+  using: node20
+  main: dist/index.js

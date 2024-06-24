@@ -1,0 +1,121 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test-typescript:
+    name: TypeScript Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install Dependencies
+        id: npm-ci
+        run: npm ci
+
+      - name: Check Format
+        id: npm-format-check
+        run: npm run format:check
+
+      - name: Lint
+        id: npm-lint
+        run: npm run lint
+
+      - name: Test
+        id: npm-ci-test
+        run: npm run ci-test
+
+  test-move-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Retrieve secrets from Keeper
+        uses: Keeper-Security/ksm-action@v1
+        with:
+          keeper-secret-config: ${{ secrets.KSM_CONFIG }}
+          secrets: |
+            ${{ vars.KEEPER_GOOGLE_SERVICE_ACCOUNT_RECORD_ID }}/field/password > env:GDRIVE_SERVICE_ACCOUNT_CREDENTIALS
+
+      - name: Create dummy file
+        id: test-resources
+        run: |
+          mkdir -p output/files
+          echo 'Hello World' > output/files/hello.txt
+          echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload test file
+        uses: bonitasoft/gdrive-upload-action@v1
+        with:
+          credentials: ${{ env.GDRIVE_SERVICE_ACCOUNT_CREDENTIALS }}
+          source-filepath: output/files/hello.txt
+          parent-folder-id: ${{ vars.GDRIVE_GITHUB_ACTION_FOLDER }}
+          target-filepath: hello.txt
+          overwrite: true
+
+      - name: Test Local Move Action
+        id: test-action
+        uses: ./move
+        with:
+          credentials: ${{ env.GDRIVE_SERVICE_ACCOUNT_CREDENTIALS }}
+          source-parent-folder-id: ${{ vars.GDRIVE_GITHUB_ACTION_FOLDER }}
+          element-name: hello.txt
+          target-parent-folder-id: ${{ vars.GDRIVE_GITHUB_ACTION_FOLDER }}
+          target-filepath: gdrive-move-action_${{ steps.test-resources.outputs.timestamp }}/hello_renamed.text
+
+      - name: Print Output
+        id: output
+        run: echo "${{ steps.test-action.outputs.file-id }}"
+
+  test-upload-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Retrieve secrets from Keeper
+        uses: Keeper-Security/ksm-action@v1
+        with:
+          keeper-secret-config: ${{ secrets.KSM_CONFIG }}
+          secrets: |
+            ${{ vars.KEEPER_GOOGLE_SERVICE_ACCOUNT_RECORD_ID }}/field/password > env:GDRIVE_SERVICE_ACCOUNT_CREDENTIALS
+
+      - name: Create dummy file
+        run: |
+          mkdir -p output/files
+          echo 'Hello World' > output/files/hello.txt
+
+      - name: Test Local Action
+        id: test-action
+        uses: ./upload
+        with:
+          credentials: ${{ env.GDRIVE_SERVICE_ACCOUNT_CREDENTIALS }}
+          parent-folder-id: ${{ vars.GDRIVE_GITHUB_ACTION_FOLDER }}
+          source-filepath: output/files/hello.txt
+          target-filepath: output/community/test/hello_1.txt
+          overwrite: true
+          create-checksum: true
+
+      - name: Print Output
+        id: output
+        run: echo "${{ steps.test-action.outputs.file-id }}"
