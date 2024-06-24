@@ -141,7 +141,7 @@ jobs:
         with:
           credentials: ${{ env.GDRIVE_SERVICE_ACCOUNT_CREDENTIALS }}
           parent-folder-id: ${{ vars.GDRIVE_GITHUB_ACTION_FOLDER }}
-          target-filepath: output/community/test/hello_1.txt
+          target-filepath: output/community/
 
       - name: Print Output
         id: output
