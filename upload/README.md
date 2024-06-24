@@ -34,7 +34,7 @@ steps:
 
   - name: Upload file to Google Drive
     id: gdrive-upload
-    uses: bonitasoft/gdrive-upload-action@v1
+    uses: bonitasoft/gdrive-action/upload@v1
     with:
       credentials: ${{ secrets.GDRIVE_CREDENTIALS }} # credentials stored as a GitHub secret
       parent-folder-id: ${{ vars.GDRIVE_FOLDER_ID }} # folder id stored as a GitHub variable

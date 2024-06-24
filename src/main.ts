@@ -22,7 +22,70 @@ export const INPUT_TARGET_PARENT_FOLDER_ID = 'target-parent-folder-id'
 export const OUTPUT_FILE_ID = 'file-id'
 
 /**
- * The main function for the action.
+ * The main function for the delete action.
+ * @returns {Promise<void>} Resolves when the action is complete.
+ */
+export async function runDelete(): Promise<void> {
+  try {
+    // Get inputs
+    const credentials = core.getInput(INPUT_CREDENTIALS, { required: true })
+    const parentFolderId = core.getInput(INPUT_PARENT_FOLDER_ID, { required: true })
+    const targetFilePath = core.getInput(INPUT_TARGET_FILEPATH, { required: true })
+
+    // Init Google Drive API instance
+    const drive = initDriveAPI(credentials)
+
+    const fileId = await deleteFile(drive, parentFolderId, targetFilePath)
+
+    // Set outputs
+    core.setOutput(OUTPUT_FILE_ID, fileId)
+  } catch (error) {
+    // Fail the workflow run if an error occurs
+    if (error instanceof Error) {
+      core.setFailed(error.message)
+    } else {
+      core.setFailed(`Error: ${error}`)
+    }
+  }
+}
+
+async function deleteFile(
+  drive: google.drive_v3.Drive,
+  parentId: string,
+  targetFilePath: string
+): Promise<string | null> {
+  if (targetFilePath.endsWith('/')) {
+    targetFilePath = targetFilePath.substring(0, targetFilePath.length - 1)
+  }
+  const targetPaths = targetFilePath.split(path.sep)
+  while (targetPaths.length > 1) {
+    const folderName = targetPaths.shift()
+    if (folderName !== undefined) {
+      const parentFolderId = await getFileId(drive, parentId, folderName)
+      if (!parentFolderId) {
+        throw new Error(`Folder '${folderName}' does not exist in folder '${parentId}'`)
+      }
+      parentId = parentFolderId
+    }
+  }
+
+  const fileName = targetPaths[targetPaths.length - 1]
+  const fileId = await getFileId(drive, parentId, fileName)
+  if (!fileId) {
+    throw new Error(`File '${fileName}' does not exist in folder '${parentId}'`)
+  }
+
+  core.debug(`Deleting file '${fileName}' in folder '${parentId}'`)
+  await drive.files.delete({
+    fileId,
+    supportsAllDrives: true
+  })
+
+  return fileId
+}
+
+/**
+ * The main function for the upload action.
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 export async function runUpload(): Promise<void> {
@@ -65,7 +128,7 @@ export async function runUpload(): Promise<void> {
 }
 
 /**
- * The main function for the action.
+ * The main function for the move action.
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 export async function runMove(): Promise<void> {
