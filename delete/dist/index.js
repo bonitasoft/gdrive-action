@@ -51615,7 +51615,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.OUTPUT_FILE_ID = exports.INPUT_TARGET_PARENT_FOLDER_ID = exports.INPUT_ELEMENT_NAME = exports.INPUT_SOURCE_PARENT_FOLDER_ID = exports.INPUT_CREATE_CHECKSUM = exports.INPUT_OVERWRITE = exports.INPUT_TARGET_FILEPATH = exports.INPUT_SOURCE_FILEPATH = exports.INPUT_PARENT_FOLDER_ID = exports.INPUT_CREDENTIALS = void 0;
+exports.OUTPUT_FILE_ID = exports.INPUT_IGNORE_MISSING = exports.INPUT_TARGET_PARENT_FOLDER_ID = exports.INPUT_ELEMENT_NAME = exports.INPUT_SOURCE_PARENT_FOLDER_ID = exports.INPUT_CREATE_CHECKSUM = exports.INPUT_OVERWRITE = exports.INPUT_TARGET_FILEPATH = exports.INPUT_SOURCE_FILEPATH = exports.INPUT_PARENT_FOLDER_ID = exports.INPUT_CREDENTIALS = void 0;
 exports.runDelete = runDelete;
 exports.runUpload = runUpload;
 exports.runMove = runMove;
@@ -51636,6 +51636,7 @@ exports.INPUT_CREATE_CHECKSUM = 'create-checksum';
 exports.INPUT_SOURCE_PARENT_FOLDER_ID = 'source-parent-folder-id';
 exports.INPUT_ELEMENT_NAME = 'element-name';
 exports.INPUT_TARGET_PARENT_FOLDER_ID = 'target-parent-folder-id';
+exports.INPUT_IGNORE_MISSING = 'ignore-missing';
 // Outputs
 exports.OUTPUT_FILE_ID = 'file-id';
 /**
@@ -51648,9 +51649,10 @@ async function runDelete() {
         const credentials = core.getInput(exports.INPUT_CREDENTIALS, { required: true });
         const parentFolderId = core.getInput(exports.INPUT_PARENT_FOLDER_ID, { required: true });
         const targetFilePath = core.getInput(exports.INPUT_TARGET_FILEPATH, { required: true });
+        const ignoreMissing = core.getBooleanInput(exports.INPUT_IGNORE_MISSING);
         // Init Google Drive API instance
         const drive = initDriveAPI(credentials);
-        const fileId = await deleteFile(drive, parentFolderId, targetFilePath);
+        const fileId = await deleteFile(drive, parentFolderId, targetFilePath, ignoreMissing);
         // Set outputs
         core.setOutput(exports.OUTPUT_FILE_ID, fileId);
     }
@@ -51664,7 +51666,7 @@ async function runDelete() {
         }
     }
 }
-async function deleteFile(drive, parentId, targetFilePath) {
+async function deleteFile(drive, parentId, targetFilePath, ignoreMissing) {
     if (targetFilePath.endsWith('/')) {
         targetFilePath = targetFilePath.substring(0, targetFilePath.length - 1);
     }
@@ -51682,6 +51684,10 @@ async function deleteFile(drive, parentId, targetFilePath) {
     const fileName = targetPaths[targetPaths.length - 1];
     const fileId = await getFileId(drive, parentId, fileName);
     if (!fileId) {
+        if (ignoreMissing) {
+            core.warning(`File '${fileName}' does not exist in folder '${parentId}'`);
+            return null;
+        }
         throw new Error(`File '${fileName}' does not exist in folder '${parentId}'`);
     }
     core.debug(`Deleting file '${fileName}' in folder '${parentId}'`);

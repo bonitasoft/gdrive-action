@@ -17,6 +17,7 @@ export const INPUT_CREATE_CHECKSUM = 'create-checksum'
 export const INPUT_SOURCE_PARENT_FOLDER_ID = 'source-parent-folder-id'
 export const INPUT_ELEMENT_NAME = 'element-name'
 export const INPUT_TARGET_PARENT_FOLDER_ID = 'target-parent-folder-id'
+export const INPUT_IGNORE_MISSING = 'ignore-missing'
 
 // Outputs
 export const OUTPUT_FILE_ID = 'file-id'
@@ -31,11 +32,12 @@ export async function runDelete(): Promise<void> {
     const credentials = core.getInput(INPUT_CREDENTIALS, { required: true })
     const parentFolderId = core.getInput(INPUT_PARENT_FOLDER_ID, { required: true })
     const targetFilePath = core.getInput(INPUT_TARGET_FILEPATH, { required: true })
+    const ignoreMissing = core.getBooleanInput(INPUT_IGNORE_MISSING)
 
     // Init Google Drive API instance
     const drive = initDriveAPI(credentials)
 
-    const fileId = await deleteFile(drive, parentFolderId, targetFilePath)
+    const fileId = await deleteFile(drive, parentFolderId, targetFilePath, ignoreMissing)
 
     // Set outputs
     core.setOutput(OUTPUT_FILE_ID, fileId)
@@ -52,11 +54,13 @@ export async function runDelete(): Promise<void> {
 async function deleteFile(
   drive: google.drive_v3.Drive,
   parentId: string,
-  targetFilePath: string
+  targetFilePath: string,
+  ignoreMissing: boolean
 ): Promise<string | null> {
   if (targetFilePath.endsWith('/')) {
     targetFilePath = targetFilePath.substring(0, targetFilePath.length - 1)
   }
+
   const targetPaths = targetFilePath.split(path.sep)
   while (targetPaths.length > 1) {
     const folderName = targetPaths.shift()
@@ -72,6 +76,10 @@ async function deleteFile(
   const fileName = targetPaths[targetPaths.length - 1]
   const fileId = await getFileId(drive, parentId, fileName)
   if (!fileId) {
+    if (ignoreMissing) {
+      core.warning(`File '${fileName}' does not exist in folder '${parentId}'`)
+      return null
+    }
     throw new Error(`File '${fileName}' does not exist in folder '${parentId}'`)
   }
 
