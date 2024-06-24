@@ -14,6 +14,9 @@ inputs:
     description:
       'The remote file path in Google Drive of the file to delete relative to the
       given parent folder.'
+  ignore-missing:
+    description: 'Ignore if the target file does not exist.'
+    default: 'false'
 
 outputs:
   file-id:
