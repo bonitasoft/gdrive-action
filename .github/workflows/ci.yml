@@ -105,7 +105,7 @@ jobs:
           mkdir -p output/files
           echo 'Hello World' > output/files/hello.txt
 
-      - name: Test Local Action
+      - name: Test Local Upload Action
         id: test-action
         uses: ./upload
         with:
@@ -115,6 +115,33 @@ jobs:
           target-filepath: output/community/test/hello_1.txt
           overwrite: true
           create-checksum: true
+
+      - name: Print Output
+        id: output
+        run: echo "${{ steps.test-action.outputs.file-id }}"
+
+  test-delete-action:
+    needs: test-upload-action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Retrieve secrets from Keeper
+        uses: Keeper-Security/ksm-action@v1
+        with:
+          keeper-secret-config: ${{ secrets.KSM_CONFIG }}
+          secrets: |
+            ${{ vars.KEEPER_GOOGLE_SERVICE_ACCOUNT_RECORD_ID }}/field/password > env:GDRIVE_SERVICE_ACCOUNT_CREDENTIALS
+
+      - name: Test Local Delete Action
+        id: test-action
+        uses: ./delete
+        with:
+          credentials: ${{ env.GDRIVE_SERVICE_ACCOUNT_CREDENTIALS }}
+          parent-folder-id: ${{ vars.GDRIVE_GITHUB_ACTION_FOLDER }}
+          target-filepath: output/community/test/hello_1.txt
 
       - name: Print Output
         id: output

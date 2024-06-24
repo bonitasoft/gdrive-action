@@ -30,7 +30,7 @@ steps:
 
   - name: Move file on Google Drive
     id: gdrive-move
-    uses: bonitasoft/gdrive-action@v1
+    uses: bonitasoft/gdrive-action/move@v1
     with:
       credentials: ${{ secrets.GDRIVE_CREDENTIALS }} # credentials stored as a GitHub secret
       source parent-folder-id: ${{ vars.SOURCE_GDRIVE_FOLDER_ID }} # folder id stored as a GitHub variable
