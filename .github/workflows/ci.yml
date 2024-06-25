@@ -64,7 +64,7 @@ jobs:
           echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> "$GITHUB_OUTPUT"
 
       - name: Upload test file
-        uses: bonitasoft/gdrive-upload-action@v1
+        uses: bonitasoft/gdrive-action/upload@v1
         with:
           credentials: ${{ env.GDRIVE_SERVICE_ACCOUNT_CREDENTIALS }}
           source-filepath: output/files/hello.txt
