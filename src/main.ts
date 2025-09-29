@@ -18,6 +18,7 @@ export const INPUT_SOURCE_PARENT_FOLDER_ID = 'source-parent-folder-id'
 export const INPUT_ELEMENT_NAME = 'element-name'
 export const INPUT_TARGET_PARENT_FOLDER_ID = 'target-parent-folder-id'
 export const INPUT_IGNORE_MISSING = 'ignore-missing'
+export const INPUT_HARD_DELETE = 'hard-delete'
 
 // Outputs
 export const OUTPUT_FILE_ID = 'file-id'
@@ -33,14 +34,17 @@ export async function runDelete(): Promise<void> {
     const parentFolderId = core.getInput(INPUT_PARENT_FOLDER_ID, { required: true })
     const targetFilePath = core.getInput(INPUT_TARGET_FILEPATH, { required: true })
     const ignoreMissing = core.getBooleanInput(INPUT_IGNORE_MISSING)
+    const hardDelete = core.getBooleanInput(INPUT_HARD_DELETE)
 
     // Init Google Drive API instance
     const drive = initDriveAPI(credentials)
 
-    const fileId = await deleteFile(drive, parentFolderId, targetFilePath, ignoreMissing)
+    const fileId = await deleteFile(drive, parentFolderId, targetFilePath, ignoreMissing, hardDelete)
 
     // Set outputs
     core.setOutput(OUTPUT_FILE_ID, fileId)
+
+    core.info('File deletion completed successfully.')
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) {
@@ -55,7 +59,8 @@ async function deleteFile(
   drive: google.drive_v3.Drive,
   parentId: string,
   targetFilePath: string,
-  ignoreMissing: boolean
+  ignoreMissing: boolean,
+  hardDelete: boolean
 ): Promise<string | null> {
   if (targetFilePath.endsWith('/')) {
     targetFilePath = targetFilePath.substring(0, targetFilePath.length - 1)
@@ -83,11 +88,20 @@ async function deleteFile(
     throw new Error(`File '${fileName}' does not exist in folder '${parentId}'`)
   }
 
-  core.debug(`Deleting file '${fileName}' in folder '${parentId}'`)
-  await drive.files.delete({
-    fileId,
-    supportsAllDrives: true
-  })
+  if (hardDelete) {
+    core.debug(`Deleting file '${fileName}' with ID '${fileId}' in folder '${parentId}'`)
+    await drive.files.delete({
+      fileId,
+      supportsAllDrives: true
+    })
+  } else {
+    core.debug(`Trashing file '${fileName}' with ID '${fileId}' in folder '${parentId}'`)
+    await drive.files.update({
+      fileId,
+      requestBody: { trashed: true },
+      supportsAllDrives: true
+    })
+  }
 
   return fileId
 }
@@ -125,6 +139,8 @@ export async function runUpload(): Promise<void> {
 
     // Set outputs
     core.setOutput(OUTPUT_FILE_ID, fileId)
+
+    core.info('File upload completed successfully.')
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) {
@@ -155,6 +171,8 @@ export async function runMove(): Promise<void> {
 
     // Set outputs
     core.setOutput(OUTPUT_FILE_ID, fileId)
+
+    core.info('File move completed successfully.')
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) {

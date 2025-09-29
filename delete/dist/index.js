@@ -54639,7 +54639,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.OUTPUT_FILE_ID = exports.INPUT_IGNORE_MISSING = exports.INPUT_TARGET_PARENT_FOLDER_ID = exports.INPUT_ELEMENT_NAME = exports.INPUT_SOURCE_PARENT_FOLDER_ID = exports.INPUT_CREATE_CHECKSUM = exports.INPUT_OVERWRITE = exports.INPUT_TARGET_FILEPATH = exports.INPUT_SOURCE_FILEPATH = exports.INPUT_PARENT_FOLDER_ID = exports.INPUT_CREDENTIALS = void 0;
+exports.OUTPUT_FILE_ID = exports.INPUT_HARD_DELETE = exports.INPUT_IGNORE_MISSING = exports.INPUT_TARGET_PARENT_FOLDER_ID = exports.INPUT_ELEMENT_NAME = exports.INPUT_SOURCE_PARENT_FOLDER_ID = exports.INPUT_CREATE_CHECKSUM = exports.INPUT_OVERWRITE = exports.INPUT_TARGET_FILEPATH = exports.INPUT_SOURCE_FILEPATH = exports.INPUT_PARENT_FOLDER_ID = exports.INPUT_CREDENTIALS = void 0;
 exports.runDelete = runDelete;
 exports.runUpload = runUpload;
 exports.runMove = runMove;
@@ -54661,6 +54661,7 @@ exports.INPUT_SOURCE_PARENT_FOLDER_ID = 'source-parent-folder-id';
 exports.INPUT_ELEMENT_NAME = 'element-name';
 exports.INPUT_TARGET_PARENT_FOLDER_ID = 'target-parent-folder-id';
 exports.INPUT_IGNORE_MISSING = 'ignore-missing';
+exports.INPUT_HARD_DELETE = 'hard-delete';
 // Outputs
 exports.OUTPUT_FILE_ID = 'file-id';
 /**
@@ -54674,11 +54675,13 @@ async function runDelete() {
         const parentFolderId = core.getInput(exports.INPUT_PARENT_FOLDER_ID, { required: true });
         const targetFilePath = core.getInput(exports.INPUT_TARGET_FILEPATH, { required: true });
         const ignoreMissing = core.getBooleanInput(exports.INPUT_IGNORE_MISSING);
+        const hardDelete = core.getBooleanInput(exports.INPUT_HARD_DELETE);
         // Init Google Drive API instance
         const drive = initDriveAPI(credentials);
-        const fileId = await deleteFile(drive, parentFolderId, targetFilePath, ignoreMissing);
+        const fileId = await deleteFile(drive, parentFolderId, targetFilePath, ignoreMissing, hardDelete);
         // Set outputs
         core.setOutput(exports.OUTPUT_FILE_ID, fileId);
+        core.info('File deletion completed successfully.');
     }
     catch (error) {
         // Fail the workflow run if an error occurs
@@ -54690,7 +54693,7 @@ async function runDelete() {
         }
     }
 }
-async function deleteFile(drive, parentId, targetFilePath, ignoreMissing) {
+async function deleteFile(drive, parentId, targetFilePath, ignoreMissing, hardDelete) {
     if (targetFilePath.endsWith('/')) {
         targetFilePath = targetFilePath.substring(0, targetFilePath.length - 1);
     }
@@ -54714,11 +54717,21 @@ async function deleteFile(drive, parentId, targetFilePath, ignoreMissing) {
         }
         throw new Error(`File '${fileName}' does not exist in folder '${parentId}'`);
     }
-    core.debug(`Deleting file '${fileName}' in folder '${parentId}'`);
-    await drive.files.delete({
-        fileId,
-        supportsAllDrives: true
-    });
+    if (hardDelete) {
+        core.debug(`Deleting file '${fileName}' with ID '${fileId}' in folder '${parentId}'`);
+        await drive.files.delete({
+            fileId,
+            supportsAllDrives: true
+        });
+    }
+    else {
+        core.debug(`Trashing file '${fileName}' with ID '${fileId}' in folder '${parentId}'`);
+        await drive.files.update({
+            fileId,
+            requestBody: { trashed: true },
+            supportsAllDrives: true
+        });
+    }
     return fileId;
 }
 /**
@@ -54752,6 +54765,7 @@ async function runUpload() {
         }
         // Set outputs
         core.setOutput(exports.OUTPUT_FILE_ID, fileId);
+        core.info('File upload completed successfully.');
     }
     catch (error) {
         // Fail the workflow run if an error occurs
@@ -54780,6 +54794,7 @@ async function runMove() {
         const fileId = await moveFile(drive, sourceParentFolderId, elementName, targetParentFolderId, targetFilePath);
         // Set outputs
         core.setOutput(exports.OUTPUT_FILE_ID, fileId);
+        core.info('File move completed successfully.');
     }
     catch (error) {
         // Fail the workflow run if an error occurs
