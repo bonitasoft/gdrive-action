@@ -18,6 +18,7 @@ export const INPUT_SOURCE_PARENT_FOLDER_ID = 'source-parent-folder-id'
 export const INPUT_ELEMENT_NAME = 'element-name'
 export const INPUT_TARGET_PARENT_FOLDER_ID = 'target-parent-folder-id'
 export const INPUT_IGNORE_MISSING = 'ignore-missing'
+export const INPUT_HARD_DELETE = 'hard-delete'
 
 // Outputs
 export const OUTPUT_FILE_ID = 'file-id'
@@ -33,14 +34,17 @@ export async function runDelete(): Promise<void> {
     const parentFolderId = core.getInput(INPUT_PARENT_FOLDER_ID, { required: true })
     const targetFilePath = core.getInput(INPUT_TARGET_FILEPATH, { required: true })
     const ignoreMissing = core.getBooleanInput(INPUT_IGNORE_MISSING)
+    const hardDelete = core.getBooleanInput(INPUT_HARD_DELETE)
 
     // Init Google Drive API instance
     const drive = initDriveAPI(credentials)
 
-    const fileId = await deleteFile(drive, parentFolderId, targetFilePath, ignoreMissing)
+    const fileId = await deleteFile(drive, parentFolderId, targetFilePath, ignoreMissing, hardDelete)
 
     // Set outputs
     core.setOutput(OUTPUT_FILE_ID, fileId)
+
+    core.info('File deletion completed successfully.')
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) {
@@ -55,7 +59,8 @@ async function deleteFile(
   drive: google.drive_v3.Drive,
   parentId: string,
   targetFilePath: string,
-  ignoreMissing: boolean
+  ignoreMissing: boolean,
+  hardDelete: boolean
 ): Promise<string | null> {
   if (targetFilePath.endsWith('/')) {
     targetFilePath = targetFilePath.substring(0, targetFilePath.length - 1)
@@ -77,17 +82,28 @@ async function deleteFile(
   const fileId = await getFileId(drive, parentId, fileName)
   if (!fileId) {
     if (ignoreMissing) {
-      core.warning(`File '${fileName}' does not exist in folder '${parentId}'`)
+      core.warning(`File '${fileName}' does not exist in folder '${parentId}'. Skipping the deletion.`)
       return null
     }
     throw new Error(`File '${fileName}' does not exist in folder '${parentId}'`)
   }
 
-  core.debug(`Deleting file '${fileName}' in folder '${parentId}'`)
-  await drive.files.delete({
-    fileId,
-    supportsAllDrives: true
-  })
+  if (hardDelete) {
+    core.info(`Deleting file '${fileName}' from folder '${parentId}'`)
+    core.debug(`File ID: ${fileId}`)
+    await drive.files.delete({
+      fileId,
+      supportsAllDrives: true
+    })
+  } else {
+    core.info(`Trashing file '${fileName}' from folder '${parentId}'`)
+    core.debug(`File ID: ${fileId}`)
+    await drive.files.update({
+      fileId,
+      requestBody: { trashed: true },
+      supportsAllDrives: true
+    })
+  }
 
   return fileId
 }
@@ -111,6 +127,7 @@ export async function runUpload(): Promise<void> {
 
     const fileId = await uploadFile(drive, parentFolderId, sourceFilePath, targetFilePath, overwrite)
     if (fileId && createChecksum) {
+      core.debug(`Generating SHA256 checksum file for the file '${fileId}'`)
       let checksumTargetFilePath = ''
       if (!targetFilePath) {
         const paths = sourceFilePath.split(path.sep)
@@ -125,6 +142,8 @@ export async function runUpload(): Promise<void> {
 
     // Set outputs
     core.setOutput(OUTPUT_FILE_ID, fileId)
+
+    core.info('File upload completed successfully.')
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) {
@@ -155,6 +174,8 @@ export async function runMove(): Promise<void> {
 
     // Set outputs
     core.setOutput(OUTPUT_FILE_ID, fileId)
+
+    core.info('File move completed successfully.')
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) {
@@ -189,7 +210,9 @@ async function moveFile(
   if (fileId) {
     throw new Error(`A file with name '${fileName}' already exists in folder identified by '${targetParentId}'.`)
   } else {
-    core.debug(`Moving file '${elementName}' in folder identified by '${targetParentId}'`)
+    core.info(
+      `Moving file '${elementName}' from '${sourceParentId}' to '${targetParentId}' with new name '${fileName}'`
+    )
     return await move(drive, sourceParentId, elementName, targetParentId, fileName)
   }
 }
@@ -279,13 +302,16 @@ async function uploadFile(
   if (fileId && !overwrite) {
     throw new Error(
       `A file with name '${fileName}' already exists in folder identified by '${parentId}'. ` +
-        `Use 'overwrite' option to overwrite existing file.`
+        `Use '${INPUT_OVERWRITE}' option to overwrite existing file.`
     )
   } else if (fileId && overwrite) {
-    core.debug(`Updating existing file '${fileName}' in folder identified by '${parentId}'`)
+    core.info(`Updating existing file '${fileName}' in folder '${parentId}'`)
+    core.debug(`File ID: ${fileId}`)
+    core.debug(`Source file path: ${sourceFilePath}`)
     return await updateFile(drive, fileId, sourceFilePath)
   } else {
-    core.debug(`Creating file '${fileName}' in folder identified by '${parentId}'`)
+    core.info(`Creating file '${fileName}' in folder '${parentId}'`)
+    core.debug(`Source file path: ${sourceFilePath}`)
     return await createFile(drive, parentId, fileName, sourceFilePath)
   }
 }
@@ -306,6 +332,8 @@ async function getFileId(drive: google.drive_v3.Drive, parentId: string, fileNam
     return null
   }
   if (files.length > 1) {
+    core.debug(`Multiple entries match the file name '${fileName}':`)
+    files.map(f => core.debug(`- ${f.id}`))
     throw new Error(`More than one entry match the file name '${fileName}'`)
   }
   return files[0].id || null
@@ -319,7 +347,7 @@ async function createFolder(drive: google.drive_v3.Drive, parentId: string, fold
     return folderId
   }
 
-  core.debug(`Creating folder '${folderName}' in folder '${parentId}'`)
+  core.info(`Creating folder '${folderName}' in folder '${parentId}'`)
   const requestParams: google.drive_v3.Params$Resource$Files$Create = {
     requestBody: {
       parents: [parentId],
@@ -331,7 +359,7 @@ async function createFolder(drive: google.drive_v3.Drive, parentId: string, fold
   }
   const response = await drive.files.create(requestParams)
   const folder: google.drive_v3.Schema$File = response.data
-  core.debug(`Folder id: ${folder.id}`)
+  core.debug(`New folder ID: ${folder.id}`)
   if (!folder.id) {
     throw new Error(`Failed to create folder ${folderName} in ${parentId}`)
   }
@@ -357,7 +385,7 @@ async function createFile(
   }
   const response = await drive.files.create(requestParams)
   const file: google.drive_v3.Schema$File = response.data
-  core.debug(`File id: ${file.id}`)
+  core.debug(`New file ID: ${file.id}`)
   if (!file.id) {
     throw new Error(`Failed to create file '${fileName}' in folder identified by '${parentId}'`)
   }
@@ -379,7 +407,7 @@ async function updateFile(drive: google.drive_v3.Drive, fileId: string, sourceFi
   }
   const response = await drive.files.update(requestParams)
   const file: google.drive_v3.Schema$File = response.data
-  core.debug(`File id: ${file.id}`)
+  core.debug(`Updated file ID: ${file.id}`)
   if (!file.id) {
     throw new Error(`Failed to update file identified by '${fileId}'`)
   }

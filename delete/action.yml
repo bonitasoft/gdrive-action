@@ -1,5 +1,5 @@
 name: 'gdrive-delete-action'
-description: 'GitHub Action that delete files from Google Drive.'
+description: 'GitHub Action that deletes a file or folder from Google Drive.'
 author: 'Bonitasoft'
 
 inputs:
@@ -15,7 +15,10 @@ inputs:
       'The remote file path in Google Drive of the file to delete relative to the
       given parent folder.'
   ignore-missing:
-    description: 'Ignore if the target file does not exist.'
+    description: 'Ignore error if the target file does not exist.'
+    default: 'false'
+  hard-delete:
+    description: 'Permanently delete the file instead of moving it to the trash.'
     default: 'false'
 
 outputs:
