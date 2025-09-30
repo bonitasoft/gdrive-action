@@ -54712,20 +54712,22 @@ async function deleteFile(drive, parentId, targetFilePath, ignoreMissing, hardDe
     const fileId = await getFileId(drive, parentId, fileName);
     if (!fileId) {
         if (ignoreMissing) {
-            core.warning(`File '${fileName}' does not exist in folder '${parentId}'`);
+            core.warning(`File '${fileName}' does not exist in folder '${parentId}'. Skipping the deletion.`);
             return null;
         }
         throw new Error(`File '${fileName}' does not exist in folder '${parentId}'`);
     }
     if (hardDelete) {
-        core.debug(`Deleting file '${fileName}' with ID '${fileId}' in folder '${parentId}'`);
+        core.info(`Deleting file '${fileName}' from folder '${parentId}'`);
+        core.debug(`File ID: ${fileId}`);
         await drive.files.delete({
             fileId,
             supportsAllDrives: true
         });
     }
     else {
-        core.debug(`Trashing file '${fileName}' with ID '${fileId}' in folder '${parentId}'`);
+        core.info(`Trashing file '${fileName}' from folder '${parentId}'`);
+        core.debug(`File ID: ${fileId}`);
         await drive.files.update({
             fileId,
             requestBody: { trashed: true },
@@ -54751,6 +54753,7 @@ async function runUpload() {
         const drive = initDriveAPI(credentials);
         const fileId = await uploadFile(drive, parentFolderId, sourceFilePath, targetFilePath, overwrite);
         if (fileId && createChecksum) {
+            core.debug(`Generating SHA256 checksum file for the file '${fileId}'`);
             let checksumTargetFilePath = '';
             if (!targetFilePath) {
                 const paths = sourceFilePath.split(path_1.default.sep);
@@ -54823,7 +54826,7 @@ async function moveFile(drive, sourceParentId, elementName, targetParentId, targ
         throw new Error(`A file with name '${fileName}' already exists in folder identified by '${targetParentId}'.`);
     }
     else {
-        core.debug(`Moving file '${elementName}' in folder identified by '${targetParentId}'`);
+        core.info(`Moving file '${elementName}' from '${sourceParentId}' to '${targetParentId}' with new name '${fileName}'`);
         return await move(drive, sourceParentId, elementName, targetParentId, fileName);
     }
 }
@@ -54888,14 +54891,17 @@ async function uploadFile(drive, parentId, sourceFilePath, targetFilePath, overw
     const fileId = await getFileId(drive, parentId, fileName);
     if (fileId && !overwrite) {
         throw new Error(`A file with name '${fileName}' already exists in folder identified by '${parentId}'. ` +
-            `Use 'overwrite' option to overwrite existing file.`);
+            `Use '${exports.INPUT_OVERWRITE}' option to overwrite existing file.`);
     }
     else if (fileId && overwrite) {
-        core.debug(`Updating existing file '${fileName}' in folder identified by '${parentId}'`);
+        core.info(`Updating existing file '${fileName}' in folder '${parentId}'`);
+        core.debug(`File ID: ${fileId}`);
+        core.debug(`Source file path: ${sourceFilePath}`);
         return await updateFile(drive, fileId, sourceFilePath);
     }
     else {
-        core.debug(`Creating file '${fileName}' in folder identified by '${parentId}'`);
+        core.info(`Creating file '${fileName}' in folder '${parentId}'`);
+        core.debug(`Source file path: ${sourceFilePath}`);
         return await createFile(drive, parentId, fileName, sourceFilePath);
     }
 }
@@ -54914,6 +54920,8 @@ async function getFileId(drive, parentId, fileName) {
         return null;
     }
     if (files.length > 1) {
+        core.debug(`Multiple entries match the file name '${fileName}':`);
+        files.map(f => core.debug(`- ${f.id}`));
         throw new Error(`More than one entry match the file name '${fileName}'`);
     }
     return files[0].id || null;
@@ -54925,7 +54933,7 @@ async function createFolder(drive, parentId, folderName) {
         core.debug(`Folder '${folderName}' already exists in folder '${parentId}'`);
         return folderId;
     }
-    core.debug(`Creating folder '${folderName}' in folder '${parentId}'`);
+    core.info(`Creating folder '${folderName}' in folder '${parentId}'`);
     const requestParams = {
         requestBody: {
             parents: [parentId],
@@ -54937,7 +54945,7 @@ async function createFolder(drive, parentId, folderName) {
     };
     const response = await drive.files.create(requestParams);
     const folder = response.data;
-    core.debug(`Folder id: ${folder.id}`);
+    core.debug(`New folder ID: ${folder.id}`);
     if (!folder.id) {
         throw new Error(`Failed to create folder ${folderName} in ${parentId}`);
     }
@@ -54957,7 +54965,7 @@ async function createFile(drive, parentId, fileName, sourceFilePath) {
     };
     const response = await drive.files.create(requestParams);
     const file = response.data;
-    core.debug(`File id: ${file.id}`);
+    core.debug(`New file ID: ${file.id}`);
     if (!file.id) {
         throw new Error(`Failed to create file '${fileName}' in folder identified by '${parentId}'`);
     }
@@ -54978,7 +54986,7 @@ async function updateFile(drive, fileId, sourceFilePath) {
     };
     const response = await drive.files.update(requestParams);
     const file = response.data;
-    core.debug(`File id: ${file.id}`);
+    core.debug(`Updated file ID: ${file.id}`);
     if (!file.id) {
         throw new Error(`Failed to update file identified by '${fileId}'`);
     }
